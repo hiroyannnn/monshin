@@ -3,6 +3,7 @@ import {
   buildExtractionMessages,
   buildSummaryMessages,
   parseExtractionResponse,
+  stripThinkTags,
   EXTRACTION_JSON_SCHEMA,
 } from './prompt'
 
@@ -66,7 +67,39 @@ describe('EXTRACTION_JSON_SCHEMA', () => {
   })
 })
 
+describe('stripThinkTags', () => {
+  it('removes a complete <think>...</think> block', () => {
+    expect(stripThinkTags('<think>まず…</think>回答です')).toBe('回答です')
+  })
+
+  it('removes multiple think blocks', () => {
+    expect(
+      stripThinkTags('<think>a</think>頭痛。<think>b</think>発熱。'),
+    ).toBe('頭痛。発熱。')
+  })
+
+  it('drops everything up to a lone closing </think> tag', () => {
+    expect(stripThinkTags('考え中... まだ考え中</think>本文だけ残る')).toBe(
+      '本文だけ残る',
+    )
+  })
+
+  it('strips bare <think> or </think> tags if unpaired', () => {
+    expect(stripThinkTags('<think>途中で切れた文')).toBe('途中で切れた文')
+  })
+
+  it('returns the input trimmed when no tags are present', () => {
+    expect(stripThinkTags('  こんにちは  ')).toBe('こんにちは')
+  })
+})
+
 describe('parseExtractionResponse', () => {
+  it('strips <think> blocks before parsing JSON', () => {
+    const raw = '<think>まず name を抽出</think>{"name":"太郎"}'
+    const { fields } = parseExtractionResponse(raw)
+    expect(fields.name).toBe('太郎')
+  })
+
   it('parses a clean JSON response', () => {
     const raw = '{"name":"山田太郎","age":"45歳"}'
     const { fields, rawJson } = parseExtractionResponse(raw)

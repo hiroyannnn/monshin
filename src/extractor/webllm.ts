@@ -2,7 +2,7 @@
 // 2 パス抽出: fields (JSON) → summary (テキスト)。
 
 import { supportsWebGPU } from './webgpu'
-import { parseExtractionResponse } from './prompt'
+import { parseExtractionResponse, stripThinkTags } from './prompt'
 import type {
   Extractor,
   ExtractorError,
@@ -185,10 +185,11 @@ export function createWebLLMExtractor(
     const parsed = parseExtractionResponse(fieldsRaw)
     const fields: Partial<MonshinFields> = { ...parsed.fields }
 
-    // 2 パス目: summary。失敗しても fields は返す
+    // 2 パス目: summary。失敗しても fields は返す。
+    // Qwen3 の <think>...</think> 漏れを除去してから格納する。
     try {
       const summaryRaw = await extractSingle(text, 'summary')
-      const summary = summaryRaw.trim()
+      const summary = stripThinkTags(summaryRaw)
       if (summary.length > 0) fields.summary = summary
     } catch {
       // summary は無くても問題ない
