@@ -1,6 +1,6 @@
 // 選択可能な WebLLM モデル一覧。
 // ID は @mlc-ai/web-llm の prebuilt app config に登録されているものを利用する。
-// 小さいモデルから順に並べて UX 上分かりやすくする。
+// 新世代 (Qwen3.5 / Qwen3) を中心に、サイズの昇順で並べる。
 
 export interface ModelOption {
   id: string
@@ -15,20 +15,28 @@ export interface ModelOption {
 
 export const AVAILABLE_MODELS: readonly ModelOption[] = [
   {
-    id: 'Qwen3-0.6B-q4f16_1-MLC',
-    label: 'Qwen3 0.6B',
-    size: '約 400MB',
-    sizeGb: 0.4,
-    japanese: '◯',
-    note: '最軽量。内蔵 GPU でも動きやすい',
+    id: 'Qwen3.5-0.8B-q4f16_1-MLC',
+    label: 'Qwen3.5 0.8B',
+    size: '約 500MB',
+    sizeGb: 0.5,
+    japanese: '◎',
+    note: '最新世代・最軽量。内蔵 GPU でも快適',
   },
   {
     id: 'Qwen3-1.7B-q4f16_1-MLC',
-    label: 'Qwen3 1.7B (推奨)',
+    label: 'Qwen3 1.7B',
     size: '約 1.0GB',
     sizeGb: 1.0,
     japanese: '◎',
-    note: 'バランス型。デフォルト',
+    note: 'thinking 対応の定番サイズ',
+  },
+  {
+    id: 'Qwen3.5-2B-q4f16_1-MLC',
+    label: 'Qwen3.5 2B (推奨)',
+    size: '約 1.2GB',
+    sizeGb: 1.2,
+    japanese: '◎',
+    note: '最新世代・バランス型。デフォルト',
   },
   {
     id: 'Qwen3-4B-q4f16_1-MLC',
@@ -38,25 +46,9 @@ export const AVAILABLE_MODELS: readonly ModelOption[] = [
     japanese: '◎',
     note: '高精度。ディスクリート GPU 推奨',
   },
-  {
-    id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
-    label: 'Qwen2.5 1.5B Instruct',
-    size: '約 1.0GB',
-    sizeGb: 1.0,
-    japanese: '◯',
-    note: 'thinking 無しの旧世代。安定志向',
-  },
-  {
-    id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
-    label: 'Llama 3.2 1B Instruct',
-    size: '約 0.8GB',
-    sizeGb: 0.8,
-    japanese: '△',
-    note: '軽量・高速。英語寄り',
-  },
 ]
 
-export const DEFAULT_MODEL_ID = 'Qwen3-1.7B-q4f16_1-MLC'
+export const DEFAULT_MODEL_ID = 'Qwen3.5-2B-q4f16_1-MLC'
 
 export function findModel(id: string): ModelOption | undefined {
   return AVAILABLE_MODELS.find((m) => m.id === id)
