@@ -4,7 +4,7 @@
 /// <reference lib="webworker" />
 
 import * as webllm from '@mlc-ai/web-llm'
-import { buildExtractionMessages, buildSummaryMessages, EXTRACTION_JSON_SCHEMA } from './prompt'
+import { buildExtractionMessages, buildSummaryMessages } from './prompt'
 import type { WorkerEvent, WorkerRequest } from './worker-protocol'
 
 type MLCEngine = webllm.MLCEngine
@@ -65,18 +65,16 @@ async function handleExtract(transcript: string, mode: 'fields' | 'summary') {
     const messages =
       mode === 'fields' ? buildExtractionMessages(transcript) : buildSummaryMessages(transcript)
 
-    // Qwen3 thinking を抑制 + 低温度 + JSON mode (fields 抽出時のみ)
+    // Qwen3 thinking を抑制 + 低温度。
+    // JSON schema は XGrammar の制約が厳しくトークン拒否が頻発するため、
+    // schema は渡さず json_object モードのみを指定 (抽出時)。
+    // プロンプトで JSON 形式を指示しているので十分安定する。
     const response = await engine.chat.completions.create({
       messages,
       temperature: 0.1,
       max_tokens: mode === 'fields' ? 600 : 300,
       ...(mode === 'fields'
-        ? {
-            response_format: {
-              type: 'json_object',
-              schema: JSON.stringify(EXTRACTION_JSON_SCHEMA),
-            },
-          }
+        ? { response_format: { type: 'json_object' } }
         : {}),
       extra_body: {
         enable_thinking: false,
