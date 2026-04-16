@@ -186,6 +186,40 @@ describe('createWebLLMExtractor', () => {
     })
   })
 
+  describe('streaming', () => {
+    it('forwards stream_chunk events and fires onPassStart per pass', async () => {
+      setNavigatorGpu({})
+      const { ext, worker } = makeExtractor()
+      const loadP = ext.load()
+      worker.emit({ type: 'loaded' })
+      await loadP
+
+      const chunks: Array<{ pass: string; delta: string }> = []
+      const passes: string[] = []
+      ext.setListeners({
+        onStreamChunk: (pass, delta) => chunks.push({ pass, delta }),
+        onPassStart: (pass) => passes.push(pass),
+      })
+
+      const extractP = ext.extract('頭痛。')
+      // fields pass: 複数チャンクで JSON を送出
+      worker.emit({ type: 'stream_chunk', mode: 'fields', delta: '{"name":"太' })
+      worker.emit({ type: 'stream_chunk', mode: 'fields', delta: '郎"}' })
+      worker.emit({ type: 'result', raw: '{"name":"太郎"}' })
+      await Promise.resolve()
+      // summary pass
+      worker.emit({ type: 'stream_chunk', mode: 'summary', delta: '頭痛を' })
+      worker.emit({ type: 'stream_chunk', mode: 'summary', delta: '訴える' })
+      worker.emit({ type: 'result', raw: '頭痛を訴える' })
+
+      await extractP
+      expect(passes).toEqual(['fields', 'summary'])
+      expect(chunks.map((c) => c.delta).join('')).toBe(
+        '{"name":"太郎"}頭痛を訴える',
+      )
+    })
+  })
+
   describe('cancel()', () => {
     it('terminates the worker and rejects in-flight extract', async () => {
       setNavigatorGpu({})

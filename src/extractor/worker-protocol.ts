@@ -29,6 +29,12 @@ export interface ProgressEvent {
   progress: ExtractionProgress
 }
 
+export interface StreamChunkEvent {
+  type: 'stream_chunk'
+  mode: 'fields' | 'summary'
+  delta: string
+}
+
 export interface ExtractResultEvent {
   type: 'result'
   raw: string
@@ -47,6 +53,7 @@ export interface UnloadedEvent {
 export type WorkerEvent =
   | LoadedEvent
   | ProgressEvent
+  | StreamChunkEvent
   | ExtractResultEvent
   | ErrorEvent
   | UnloadedEvent
