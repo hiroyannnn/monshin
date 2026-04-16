@@ -58,4 +58,4 @@ export type WorkerEvent =
   | ErrorEvent
   | UnloadedEvent
 
-export const DEFAULT_MODEL_ID = 'Qwen3-1.7B-q4f16_1-MLC'
+export { DEFAULT_MODEL_ID } from './models'

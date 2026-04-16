@@ -8,6 +8,12 @@ import {
 } from './domain/monshin'
 import { useTranscriber } from './hooks/useTranscriber'
 import { useExtractor } from './hooks/useExtractor'
+import {
+  AVAILABLE_MODELS,
+  findModel,
+  loadSelectedModelId,
+  saveSelectedModelId,
+} from './extractor/models'
 import { styles, colors } from './styles'
 
 const SAMPLE_TEXT =
@@ -17,9 +23,11 @@ function App() {
   const [form, setForm] = useState<MonshinFields>(() => createEmptyForm())
   const [editingField, setEditingField] = useState<MonshinFieldKey | null>(null)
   const [status, setStatus] = useState('')
+  const [modelId, setModelId] = useState<string>(() => loadSelectedModelId())
 
   const transcriber = useTranscriber()
-  const extractor = useExtractor()
+  const extractor = useExtractor(modelId)
+  const selectedModel = findModel(modelId)
 
   // 録音中は interim を finalText の末尾に連結して表示 (リアルタイムフィードバック)
   const displayedTranscript = transcriber.finalText + transcriber.interim
@@ -125,7 +133,7 @@ function App() {
           </div>
           <div style={styles.badge}>
             <span style={styles.badgeDot} />
-            WebLLM · Qwen3-1.7B
+            WebLLM · {selectedModel?.label ?? modelId}
           </div>
         </div>
       </header>
@@ -161,25 +169,41 @@ function App() {
           </div>
         )}
 
-        {/* モデルロードパネル */}
+        {/* モデル選択 + ロードパネル */}
         {!extractorUnsupported && !extractorReady && (
           <section style={styles.modelPanel}>
-            <div style={{ fontSize: 13 }}>
-              {isDownloading ? (
-                <>
-                  <strong>モデルロード中…</strong>{' '}
-                  <span style={{ color: colors.textMuted, fontSize: 12 }}>
-                    {extractor.progress?.text ?? '初回は約 1GB のダウンロードが必要です'}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <strong>AI 自動入力を有効化</strong>{' '}
-                  <span style={{ color: colors.textMuted, fontSize: 12 }}>
-                    初回は約 1GB のモデルをダウンロードします (2 回目以降はキャッシュ)
-                  </span>
-                </>
-              )}
+            <div style={styles.modelPanelInfo}>
+              <label style={styles.modelSelectLabel}>
+                モデル
+                <select
+                  value={modelId}
+                  onChange={(e) => {
+                    setModelId(e.target.value)
+                    saveSelectedModelId(e.target.value)
+                  }}
+                  disabled={isDownloading}
+                  style={styles.modelSelect}
+                >
+                  {AVAILABLE_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label} — {m.size} (日本語 {m.japanese})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div style={{ fontSize: 12, color: colors.textMuted }}>
+                {isDownloading ? (
+                  <>
+                    <strong style={{ color: colors.text }}>ロード中…</strong>{' '}
+                    {extractor.progress?.text ?? ''}
+                  </>
+                ) : (
+                  <>
+                    {selectedModel?.note ?? ''} ·
+                    初回は {selectedModel?.size ?? '約 1GB'} のダウンロード (キャッシュ有)
+                  </>
+                )}
+              </div>
             </div>
             {isDownloading && (
               <div style={styles.progressBarOuter}>
