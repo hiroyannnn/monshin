@@ -18,8 +18,7 @@ interface SpeechRecognitionAlternativeLike {
 interface SpeechRecognitionResultLike extends ArrayLike<SpeechRecognitionAlternativeLike> {
   isFinal: boolean
 }
-interface SpeechRecognitionResultListLike
-  extends ArrayLike<SpeechRecognitionResultLike> {}
+type SpeechRecognitionResultListLike = ArrayLike<SpeechRecognitionResultLike>
 
 interface SpeechRecognitionEventLike {
   resultIndex: number
@@ -172,9 +171,17 @@ export function createWebSpeechTranscriber(
       }
       if (state === 'listening' || state === 'disposed') return
       stopRequested = false
-      if (!recognition) {
-        recognition = createRecognition()
+      // 前回のインスタンスが残っていれば一度 abort して破棄する。
+      // 同じインスタンスの stop/start 循環はブラウザによって挙動が不安定
+      if (recognition) {
+        try {
+          recognition.abort()
+        } catch {
+          // ignore
+        }
+        recognition = null
       }
+      recognition = createRecognition()
       try {
         recognition.start()
         setState('listening')
