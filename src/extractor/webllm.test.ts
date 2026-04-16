@@ -11,7 +11,7 @@ interface MaybeGpuNavigator {
 }
 function setNavigatorGpu(value: unknown) {
   Object.defineProperty(globalThis, 'navigator', {
-    value: { ...globalThis.navigator, gpu: value },
+    value: Object.assign({}, globalThis.navigator, { gpu: value }),
     configurable: true,
   })
 }

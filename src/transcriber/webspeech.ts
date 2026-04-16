@@ -18,8 +18,7 @@ interface SpeechRecognitionAlternativeLike {
 interface SpeechRecognitionResultLike extends ArrayLike<SpeechRecognitionAlternativeLike> {
   isFinal: boolean
 }
-interface SpeechRecognitionResultListLike
-  extends ArrayLike<SpeechRecognitionResultLike> {}
+type SpeechRecognitionResultListLike = ArrayLike<SpeechRecognitionResultLike>
 
 interface SpeechRecognitionEventLike {
   resultIndex: number
