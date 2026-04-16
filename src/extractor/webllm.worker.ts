@@ -66,16 +66,13 @@ async function handleExtract(transcript: string, mode: 'fields' | 'summary') {
       mode === 'fields' ? buildExtractionMessages(transcript) : buildSummaryMessages(transcript)
 
     // Qwen3 thinking を抑制 + 低温度。
-    // JSON schema は XGrammar の制約が厳しくトークン拒否が頻発するため、
-    // schema は渡さず json_object モードのみを指定 (抽出時)。
-    // プロンプトで JSON 形式を指示しているので十分安定する。
+    // response_format は WebLLM/XGrammar のバグ (CompileJSONSchema で
+    // BindingError: Cannot pass non-string to std::string) を踏むため指定しない。
+    // プロンプトで JSON 形式を明示し、parseExtractionResponse で緩く復元する。
     const response = await engine.chat.completions.create({
       messages,
       temperature: 0.1,
       max_tokens: mode === 'fields' ? 600 : 300,
-      ...(mode === 'fields'
-        ? { response_format: { type: 'json_object' } }
-        : {}),
       extra_body: {
         enable_thinking: false,
       },
