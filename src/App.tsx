@@ -16,12 +16,13 @@ const SAMPLE_TEXT =
 function App() {
   const [form, setForm] = useState<MonshinFields>(() => createEmptyForm())
   const [editingField, setEditingField] = useState<MonshinFieldKey | null>(null)
-  const [showTranscript, setShowTranscript] = useState(true)
   const [status, setStatus] = useState('')
 
   const transcriber = useTranscriber()
   const extractor = useExtractor()
 
+  // 録音中は interim を finalText の末尾に連結して表示 (リアルタイムフィードバック)
+  const displayedTranscript = transcriber.finalText + transcriber.interim
   const transcript = transcriber.finalText
 
   const isListening = transcriber.state === 'listening'
@@ -65,8 +66,8 @@ function App() {
   }, [extractor, transcript, flashStatus])
 
   const handleLoadSample = useCallback(() => {
-    transcriber.reset()
-    transcriber.appendFinal(SAMPLE_TEXT)
+    transcriber.stop()
+    transcriber.setFinalText(SAMPLE_TEXT)
     flashStatus('📋 サンプルテキストを読み込みました')
   }, [transcriber, flashStatus])
 
@@ -216,43 +217,38 @@ function App() {
           </div>
         </section>
 
-        {/* 文字起こし */}
+        {/* 文字起こし (常時表示・編集可) */}
         <section style={styles.transcriptSection}>
-          <button
-            onClick={() => setShowTranscript((v) => !v)}
-            style={styles.sectionToggle}
-          >
+          <div style={styles.transcriptHeader}>
             <span style={styles.sectionTitle}>
-              <span style={{ opacity: 0.6 }}>💬</span> 文字起こし
-              {transcript && (
-                <span style={styles.charCount}>{transcript.length}文字</span>
+              <span style={{ opacity: 0.6 }}>💬</span> 発話テキスト
+              {isListening && (
+                <span style={styles.liveBadge}>
+                  <span style={styles.liveDot} /> LIVE
+                </span>
               )}
             </span>
-            <span
-              style={{
-                ...styles.chevron,
-                transform: showTranscript ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            >
-              ▼
-            </span>
-          </button>
-          {showTranscript && (
-            <div style={styles.transcriptBody}>
-              {transcript || transcriber.interim ? (
-                <p style={styles.transcriptText}>
-                  {transcript}
-                  {transcriber.interim && (
-                    <span style={styles.interimText}>{transcriber.interim}</span>
-                  )}
-                </p>
-              ) : (
-                <p style={styles.placeholder}>
-                  録音ボタンを押して話しかけるか、サンプルを読み込んでください
-                </p>
-              )}
-            </div>
-          )}
+            {displayedTranscript && (
+              <span style={styles.charCount}>
+                {displayedTranscript.length}文字
+              </span>
+            )}
+          </div>
+          <textarea
+            value={displayedTranscript}
+            onChange={(e) => transcriber.setFinalText(e.target.value)}
+            readOnly={isListening}
+            placeholder={
+              transcriber.supported
+                ? '録音ボタンを押して話しかけるか、ここに直接入力してください'
+                : 'お使いのブラウザは音声認識未対応です。ここに手動で入力してください'
+            }
+            style={{
+              ...styles.transcriptTextarea,
+              ...(isListening ? styles.transcriptTextareaRecording : {}),
+            }}
+            rows={6}
+          />
         </section>
 
         {/* 問診票 */}

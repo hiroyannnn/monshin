@@ -14,6 +14,8 @@ export interface UseTranscriberResult {
   stop: () => void
   reset: () => void
   appendFinal: (text: string) => void
+  /** ユーザーのテキストエリア編集など、外部から finalText を置き換える */
+  setFinalText: (text: string) => void
 }
 
 export function useTranscriber(): UseTranscriberResult {
@@ -65,6 +67,9 @@ export function useTranscriber(): UseTranscriberResult {
     },
     appendFinal: (text) => {
       setFinalText((prev) => prev + text)
+    },
+    setFinalText: (text) => {
+      setFinalText(text)
     },
   }
 }
