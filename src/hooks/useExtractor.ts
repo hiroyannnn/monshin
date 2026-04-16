@@ -14,20 +14,18 @@ import type {
 } from '../extractor/types'
 
 // ?extractor=transformers で Transformers.js v4 実装に切替 (issue #8 spike)。
-function selectExtractor(): Extractor {
+// modelId は WebLLM 側にのみ渡す (Transformers.js は ONNX Hub 上の別 ID 体系)。
+function selectExtractor(modelId: string): Extractor {
   if (typeof window !== 'undefined') {
     const param = new URLSearchParams(window.location.search).get('extractor')
     if (param === 'transformers') return createTransformersExtractor()
   }
-  return createWebLLMExtractor()
+  return createWebLLMExtractor({ modelId })
 }
 
 export interface ExtractorStreamState {
-  /** 今動いているパス (fields / summary)。止まっていれば null */
   currentPass: ExtractionPass | null
-  /** 今パスの途中結果 (トークンを累積したもの) */
   partialText: string
-  /** inferencing 開始からの経過ミリ秒。止まっていれば null */
   elapsedMs: number | null
 }
 
@@ -48,7 +46,10 @@ const EMPTY_STREAM: ExtractorStreamState = {
   elapsedMs: null,
 }
 
-export function useExtractor(): UseExtractorResult {
+/**
+ * @param modelId 使用する WebLLM モデル ID。変わると Extractor を作り直す。
+ */
+export function useExtractor(modelId: string): UseExtractorResult {
   const extractorRef = useRef<Extractor | null>(null)
   const [state, setState] = useState<ExtractorState>('idle')
   const [progress, setProgress] = useState<ExtractionProgress | null>(null)
@@ -59,10 +60,13 @@ export function useExtractor(): UseExtractorResult {
   const startedAtRef = useRef<number | null>(null)
 
   useEffect(() => {
-    const ext = selectExtractor()
+    const ext = selectExtractor(modelId)
     extractorRef.current = ext
     setSupported(ext.supports())
     setState(ext.state)
+    setProgress(null)
+    setError(null)
+    setStream(EMPTY_STREAM)
     ext.setListeners({
       onStateChange: (s) => {
         setState(s)
@@ -72,7 +76,6 @@ export function useExtractor(): UseExtractorResult {
         } else {
           startedAtRef.current = null
           setElapsedMs(null)
-          // 推論終了時はストリームもクリア
           setStream(EMPTY_STREAM)
         }
       },
@@ -92,9 +95,8 @@ export function useExtractor(): UseExtractorResult {
       ext.dispose()
       extractorRef.current = null
     }
-  }, [])
+  }, [modelId])
 
-  // inferencing 中は 100ms 毎に elapsedMs を更新して UI に時計を表示
   useEffect(() => {
     if (state !== 'inferencing') return
     const id = window.setInterval(() => {

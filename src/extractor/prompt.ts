@@ -78,6 +78,25 @@ export function buildSummaryMessages(transcript: string): ChatMessage[] {
 
 // ── レスポンス解析 ──
 
+/**
+ * Qwen3 等の reasoning モデルが吐く <think>...</think> を除去する。
+ * enable_thinking: false でも WebLLM/モデル側の都合で漏れることがあるため
+ * 後処理でも保険的に除去する。
+ */
+export function stripThinkTags(raw: string): string {
+  // 閉じタグまで含むブロックを全削除
+  let out = raw.replace(/<think>[\s\S]*?<\/think>/gi, '')
+  // 閉じタグだけ残っていたらその直前までを think 領域と見なして削除
+  const idx = out.toLowerCase().indexOf('</think>')
+  if (idx !== -1) {
+    out = out.slice(idx + '</think>'.length)
+  }
+  // 開始タグだけ残っている (閉じない) パターンは捨てようがないので、
+  // タグ本体は消しておく
+  out = out.replace(/<\/?think>/gi, '')
+  return out.trim()
+}
+
 function stripFences(raw: string): string {
   return raw
     .replace(/^```(?:json)?\s*/i, '')
@@ -106,7 +125,8 @@ export interface ParsedExtraction {
 }
 
 export function parseExtractionResponse(raw: string): ParsedExtraction {
-  const cleaned = stripFences(raw)
+  const withoutThink = stripThinkTags(raw)
+  const cleaned = stripFences(withoutThink)
   const jsonText = cleaned.startsWith('{') ? cleaned : extractFirstJsonObject(cleaned)
   const parsed: unknown = JSON.parse(jsonText)
   if (typeof parsed !== 'object' || parsed === null) {

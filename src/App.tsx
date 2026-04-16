@@ -8,6 +8,12 @@ import {
 } from './domain/monshin'
 import { useTranscriber } from './hooks/useTranscriber'
 import { useExtractor } from './hooks/useExtractor'
+import {
+  AVAILABLE_MODELS,
+  findModel,
+  loadSelectedModelId,
+  saveSelectedModelId,
+} from './extractor/models'
 import { styles, colors } from './styles'
 
 const SAMPLE_TEXT =
@@ -17,17 +23,17 @@ function App() {
   const [form, setForm] = useState<MonshinFields>(() => createEmptyForm())
   const [editingField, setEditingField] = useState<MonshinFieldKey | null>(null)
   const [status, setStatus] = useState('')
+  const [modelId, setModelId] = useState<string>(() => loadSelectedModelId())
 
   const transcriber = useTranscriber()
-  const extractor = useExtractor()
+  const extractor = useExtractor(modelId)
+  const selectedModel = findModel(modelId)
 
-  // 録音中は interim を finalText の末尾に連結して表示 (リアルタイムフィードバック)
   const displayedTranscript = transcriber.finalText + transcriber.interim
   const transcript = transcriber.finalText
 
   const isListening = transcriber.state === 'listening'
-  const canExtract =
-    extractor.state === 'ready' && transcript.trim().length > 0
+  const canExtract = extractor.state === 'ready' && transcript.trim().length > 0
   const isDownloading = extractor.state === 'downloading'
   const isInferencing = extractor.state === 'inferencing'
 
@@ -48,9 +54,9 @@ function App() {
   const handleLoadModel = useCallback(async () => {
     try {
       await extractor.load()
-      flashStatus('✅ モデルのロードが完了しました')
+      flashStatus('モデルのロードが完了しました')
     } catch {
-      // エラーは extractor.error に反映されている
+      // extractor.error に反映
     }
   }, [extractor, flashStatus])
 
@@ -59,7 +65,7 @@ function App() {
     try {
       const result = await extractor.extract(transcript)
       setForm((prev) => mergeFields(prev, result.fields))
-      flashStatus('✅ フィールドの抽出が完了しました')
+      flashStatus('フィールドの抽出が完了しました')
     } catch {
       // extractor.error に反映
     }
@@ -68,7 +74,7 @@ function App() {
   const handleLoadSample = useCallback(() => {
     transcriber.stop()
     transcriber.setFinalText(SAMPLE_TEXT)
-    flashStatus('📋 サンプルテキストを読み込みました')
+    flashStatus('サンプルテキストを読み込みました')
   }, [transcriber, flashStatus])
 
   const handleReset = useCallback(() => {
@@ -78,7 +84,7 @@ function App() {
   }, [transcriber])
 
   const listeningMessage = useMemo(() => {
-    if (isListening) return '🎙️ 録音中… 患者さんの症状を話してください'
+    if (isListening) return '録音中 — 患者さんの症状を話してください'
     if (isInferencing) {
       const passLabel =
         extractor.stream.currentPass === 'summary'
@@ -86,16 +92,16 @@ function App() {
           : '1/2 問診票を抽出中'
       const secs =
         extractor.stream.elapsedMs !== null
-          ? ` · ${(extractor.stream.elapsedMs / 1000).toFixed(1)}秒経過`
+          ? ` · ${(extractor.stream.elapsedMs / 1000).toFixed(1)}s`
           : ''
-      return `🧠 ${passLabel}${secs}`
+      return `${passLabel}${secs}`
     }
     if (isDownloading) {
       const pct =
-        extractor.progress?.progress !== null && extractor.progress?.progress !== undefined
+        extractor.progress?.progress != null
           ? ` (${Math.round(extractor.progress.progress * 100)}%)`
           : ''
-      return `⬇️ モデルをロード中…${pct}`
+      return `モデルをロード中…${pct}`
     }
     return status
   }, [
@@ -109,110 +115,131 @@ function App() {
   ])
 
   const error = transcriber.error?.message ?? extractor.error?.message ?? null
+  const filledCount = Object.values(form).filter((v) => v.length > 0).length
 
   return (
     <div style={styles.container}>
+      {/* ── Header ── */}
       <header style={styles.header}>
         <div style={styles.headerInner}>
           <div style={styles.logoArea}>
             <div style={styles.logoIcon}>問</div>
-            <div>
-              <h1 style={styles.title}>問診アシスタント</h1>
-              <p style={styles.subtitle}>
-                音声 → 文字起こし → ブラウザローカル AI で自動入力
-              </p>
-            </div>
+            <div style={styles.logoDivider} />
+            <h1 style={styles.title}>問診アシスタント</h1>
           </div>
           <div style={styles.badge}>
             <span style={styles.badgeDot} />
-            WebLLM · Qwen3-1.7B
+            WebLLM · {selectedModel?.label ?? modelId}
           </div>
         </div>
       </header>
 
+      {/* ── 2-col main ── */}
       <main style={styles.main}>
-        {listeningMessage && <div style={styles.statusBar}>{listeningMessage}</div>}
-        {isInferencing && extractor.stream.partialText && (
-          <div style={styles.streamPreview}>
-            <div style={styles.streamPreviewLabel}>
-              {extractor.stream.currentPass === 'summary'
-                ? '要約プレビュー'
-                : 'フィールド抽出プレビュー'}
-            </div>
-            <pre style={styles.streamPreviewBody}>
-              {extractor.stream.partialText}
-              <span style={styles.streamCaret}>▊</span>
-            </pre>
-          </div>
-        )}
-        {isInferencing &&
-          extractor.stream.elapsedMs !== null &&
-          extractor.stream.elapsedMs > 30000 && (
-            <div style={styles.warningBar}>
-              ⏳ 30 秒以上経過しています。お使いの GPU の性能によっては 1〜2 分かかる場合があります。
-              キャンセルしてテキストを短くするか、そのままお待ちください。
+        {/* ── Left: controls + transcript ── */}
+        <div style={styles.leftCol}>
+          {listeningMessage && (
+            <div style={styles.statusBar}>{listeningMessage}</div>
+          )}
+          {isInferencing && extractor.stream.partialText && (
+            <div style={styles.streamPreview}>
+              <div style={styles.streamPreviewLabel}>
+                {extractor.stream.currentPass === 'summary'
+                  ? 'summary preview'
+                  : 'fields preview'}
+              </div>
+              <pre style={styles.streamPreviewBody}>
+                {extractor.stream.partialText}
+                <span style={styles.streamCaret}>▊</span>
+              </pre>
             </div>
           )}
-        {error && <div style={styles.errorBar}>{error}</div>}
-        {extractorUnsupported && (
-          <div style={styles.warningBar}>
-            ⚠️ お使いのブラウザは WebGPU 未対応のため、AI 自動入力は使えません。
-            手動での入力は可能です。Chrome 113+ / Edge 113+ / Safari 18+ を推奨します。
-          </div>
-        )}
-
-        {/* モデルロードパネル */}
-        {!extractorUnsupported && !extractorReady && (
-          <section style={styles.modelPanel}>
-            <div style={{ fontSize: 13 }}>
-              {isDownloading ? (
-                <>
-                  <strong>モデルロード中…</strong>{' '}
-                  <span style={{ color: colors.textMuted, fontSize: 12 }}>
-                    {extractor.progress?.text ?? '初回は約 1GB のダウンロードが必要です'}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <strong>AI 自動入力を有効化</strong>{' '}
-                  <span style={{ color: colors.textMuted, fontSize: 12 }}>
-                    初回は約 1GB のモデルをダウンロードします (2 回目以降はキャッシュ)
-                  </span>
-                </>
-              )}
-            </div>
-            {isDownloading && (
-              <div style={styles.progressBarOuter}>
-                <div
-                  style={{
-                    ...styles.progressBarInner,
-                    width: `${Math.round(
-                      (extractor.progress?.progress ?? 0) * 100,
-                    )}%`,
-                  }}
-                />
+          {isInferencing &&
+            extractor.stream.elapsedMs !== null &&
+            extractor.stream.elapsedMs > 30000 && (
+              <div style={styles.warningBar}>
+                30 秒以上経過。GPU 性能によっては 1〜2 分かかる場合があります。
+                キャンセルしてテキストを短くするか、そのままお待ちください。
               </div>
             )}
-            {!isDownloading ? (
-              <button
-                onClick={() => void handleLoadModel()}
-                style={{ ...styles.btn, ...styles.btnPrimary, padding: '10px 16px' }}
-              >
-                🧠 モデルをロード
-              </button>
-            ) : (
-              <button
-                onClick={() => extractor.cancel()}
-                style={{ ...styles.btn, ...styles.btnGhost, padding: '10px 16px' }}
-              >
-                キャンセル
-              </button>
-            )}
-          </section>
-        )}
+          {error && <div style={styles.errorBar}>{error}</div>}
+          {extractorUnsupported && (
+            <div style={styles.warningBar}>
+              WebGPU 未対応のため AI 解析は使えません。Chrome 113+ / Edge 113+ /
+              Safari 18+ を推奨します。手動入力は可能です。
+            </div>
+          )}
 
-        {/* コントロール */}
-        <section style={styles.controlSection}>
+          {/* モデル選択 + ロードパネル */}
+          {!extractorUnsupported && !extractorReady && (
+            <div style={styles.modelPanel}>
+              <div style={styles.modelPanelInfo}>
+                <label style={styles.modelSelectLabel}>
+                  <span>model</span>
+                  <select
+                    value={modelId}
+                    onChange={(e) => {
+                      setModelId(e.target.value)
+                      saveSelectedModelId(e.target.value)
+                    }}
+                    disabled={isDownloading}
+                    style={styles.modelSelect}
+                  >
+                    {AVAILABLE_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label} — {m.size} (JP {m.japanese})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div style={styles.modelPanelNote}>
+                  {isDownloading ? (
+                    <>
+                      <span style={styles.modelPanelTitle}>ロード中</span>
+                      <span>{extractor.progress?.text ?? ''}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span style={styles.modelPanelTitle}>AI 自動入力</span>
+                      <span>
+                        {selectedModel?.note ?? ''} · 初回{' '}
+                        {selectedModel?.size ?? '約 1GB'} ダウンロード
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {isDownloading && (
+                <div style={styles.progressBarOuter}>
+                  <div
+                    style={{
+                      ...styles.progressBarInner,
+                      width: `${Math.round(
+                        (extractor.progress?.progress ?? 0) * 100,
+                      )}%`,
+                    }}
+                  />
+                </div>
+              )}
+              {!isDownloading ? (
+                <button
+                  onClick={() => void handleLoadModel()}
+                  style={{ ...styles.btn, ...styles.btnPrimary }}
+                >
+                  モデルをロード
+                </button>
+              ) : (
+                <button
+                  onClick={() => extractor.cancel()}
+                  style={{ ...styles.btn, ...styles.btnGhost }}
+                >
+                  キャンセル
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* コントロール */}
           <div style={styles.controlGrid}>
             <button
               onClick={handleToggleRecording}
@@ -220,11 +247,11 @@ function App() {
               style={{
                 ...styles.btn,
                 ...(isListening ? styles.btnRecording : styles.btnPrimary),
-                opacity: transcriber.supported ? 1 : 0.4,
+                opacity: transcriber.supported ? 1 : 0.35,
               }}
             >
-              <span style={styles.btnIcon}>{isListening ? '⏹' : '🎙️'}</span>
-              <span>{isListening ? '録音停止' : '録音開始'}</span>
+              <RecordIcon isRecording={isListening} />
+              {isListening ? '停止' : '録音'}
               {isListening && <span style={styles.pulse} />}
             </button>
 
@@ -233,8 +260,8 @@ function App() {
                 onClick={() => extractor.cancel()}
                 style={{ ...styles.btn, ...styles.btnRecording }}
               >
-                <span style={styles.btnIcon}>⏹</span>
-                <span>解析を中止</span>
+                <RecordIcon isRecording={true} />
+                解析を中止
               </button>
             ) : (
               <button
@@ -243,11 +270,11 @@ function App() {
                 style={{
                   ...styles.btn,
                   ...styles.btnAccent,
-                  opacity: canExtract ? 1 : 0.5,
+                  opacity: canExtract ? 1 : 0.4,
                 }}
               >
-                <span style={styles.btnIcon}>🧠</span>
-                <span>AI 解析</span>
+                <SparkIcon />
+                AI 解析
               </button>
             )}
 
@@ -255,56 +282,105 @@ function App() {
               onClick={handleLoadSample}
               style={{ ...styles.btn, ...styles.btnGhost }}
             >
-              <span style={styles.btnIcon}>📋</span>
-              <span>サンプル</span>
+              サンプル
             </button>
 
-            <button onClick={handleReset} style={{ ...styles.btn, ...styles.btnGhost }}>
-              <span style={styles.btnIcon}>🔄</span>
-              <span>リセット</span>
+            <button
+              onClick={handleReset}
+              style={{ ...styles.btn, ...styles.btnGhost }}
+            >
+              リセット
             </button>
           </div>
-        </section>
 
-        {/* 文字起こし (常時表示・編集可) */}
-        <section style={styles.transcriptSection}>
-          <div style={styles.transcriptHeader}>
-            <span style={styles.sectionTitle}>
-              <span style={{ opacity: 0.6 }}>💬</span> 発話テキスト
-              {isListening && (
-                <span style={styles.liveBadge}>
-                  <span style={styles.liveDot} /> LIVE
+          {/* 文字起こし */}
+          <div style={styles.transcriptSection}>
+            <div style={styles.transcriptHeader}>
+              <span style={styles.sectionTitle}>
+                transcript
+                {isListening && (
+                  <span style={styles.liveBadge}>
+                    <span style={styles.liveDot} />
+                    LIVE
+                  </span>
+                )}
+              </span>
+              {displayedTranscript && (
+                <span style={styles.charCount}>
+                  {displayedTranscript.length} chars
                 </span>
               )}
-            </span>
-            {displayedTranscript && (
-              <span style={styles.charCount}>
-                {displayedTranscript.length}文字
-              </span>
-            )}
+            </div>
+            <div style={{ padding: '0 14px 2px' }}>
+              <textarea
+                value={displayedTranscript}
+                onChange={(e) => transcriber.setFinalText(e.target.value)}
+                readOnly={isListening}
+                placeholder={
+                  transcriber.supported
+                    ? '録音ボタンを押して話しかけるか、ここに直接テキストを入力'
+                    : '音声認識未対応。ここに手動で入力してください'
+                }
+                style={{
+                  ...styles.transcriptTextarea,
+                  ...(isListening
+                    ? {
+                        borderLeft: `2px solid ${colors.recording}`,
+                        paddingLeft: 10,
+                      }
+                    : {}),
+                }}
+                rows={8}
+              />
+            </div>
           </div>
-          <textarea
-            value={displayedTranscript}
-            onChange={(e) => transcriber.setFinalText(e.target.value)}
-            readOnly={isListening}
-            placeholder={
-              transcriber.supported
-                ? '録音ボタンを押して話しかけるか、ここに直接入力してください'
-                : 'お使いのブラウザは音声認識未対応です。ここに手動で入力してください'
-            }
-            style={{
-              ...styles.transcriptTextarea,
-              ...(isListening ? styles.transcriptTextareaRecording : {}),
-            }}
-            rows={6}
-          />
-        </section>
 
-        {/* 問診票 */}
-        <section style={styles.formSection}>
-          <h2 style={styles.formTitle}>
-            <span style={{ opacity: 0.6 }}>📄</span> 問診票
-          </h2>
+          {/* アーキテクチャ */}
+          <div style={styles.archSection}>
+            <h3 style={styles.archTitle}>アーキテクチャ</h3>
+            <div style={styles.archFlow}>
+              {[
+                { icon: 'MIC', label: '音声入力', tech: 'Web Speech API', desc: 'ブラウザ内蔵' },
+                { icon: 'TXT', label: '文字起こし', tech: 'SpeechRecognition', desc: 'リアルタイム' },
+                { icon: 'AI', label: 'AI 解析', tech: 'WebLLM · Qwen3', desc: 'WebGPU' },
+                { icon: 'FRM', label: '問診票', tech: '自動入力', desc: '手動編集可' },
+              ].map((step, i) => (
+                <div key={step.label} style={{ display: 'flex', alignItems: 'center' }}>
+                  <div style={styles.archStep}>
+                    <div style={styles.archStepIcon}>{step.icon}</div>
+                    <div style={styles.archStepLabel}>{step.label}</div>
+                    <div style={styles.archStepTech}>{step.tech}</div>
+                    <div style={styles.archStepDesc}>{step.desc}</div>
+                  </div>
+                  {i < 3 && <div style={styles.archArrow}>→</div>}
+                </div>
+              ))}
+            </div>
+            <div style={styles.archNote}>
+              <span style={{ color: colors.text, fontWeight: 500 }}>
+                完全ブラウザローカル。
+              </span>{' '}
+              <code style={styles.code}>@mlc-ai/web-llm</code> +{' '}
+              <code style={styles.code}>{selectedModel?.label ?? 'Qwen3'}</code>{' '}
+              を WebGPU で実行。サーバへのデータ送信なし。
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right: form ── */}
+        <div style={styles.rightCol}>
+          <div style={styles.formHeader}>
+            <h2 style={styles.formTitle}>問診票</h2>
+            <span
+              style={{
+                ...styles.formProgress,
+                color: filledCount > 0 ? colors.accent : colors.textMuted,
+              }}
+            >
+              {filledCount} / {FIELD_DEFINITIONS.length} 項目
+            </span>
+          </div>
+
           <div style={styles.fieldGrid}>
             {FIELD_DEFINITIONS.map((field) => {
               const isEditing = editingField === field.key
@@ -323,20 +399,23 @@ function App() {
                   onClick={() => setEditingField(field.key)}
                 >
                   <div style={styles.fieldHeader}>
-                    <span style={styles.fieldIcon}>{field.icon}</span>
                     <span style={styles.fieldLabel}>{field.label}</span>
                     {hasValue && <span style={styles.filledDot} />}
                   </div>
+
                   {isEditing ? (
                     isSummary ? (
                       <textarea
                         autoFocus
                         value={value}
                         onChange={(e) =>
-                          setForm((prev) => ({ ...prev, [field.key]: e.target.value }))
+                          setForm((prev) => ({
+                            ...prev,
+                            [field.key]: e.target.value,
+                          }))
                         }
                         onBlur={() => setEditingField(null)}
-                        style={styles.fieldTextarea}
+                        style={{ ...styles.fieldTextarea, width: '100%' }}
                         rows={3}
                       />
                     ) : (
@@ -345,14 +424,21 @@ function App() {
                         type="text"
                         value={value}
                         onChange={(e) =>
-                          setForm((prev) => ({ ...prev, [field.key]: e.target.value }))
+                          setForm((prev) => ({
+                            ...prev,
+                            [field.key]: e.target.value,
+                          }))
                         }
                         onBlur={() => setEditingField(null)}
                         style={styles.fieldInput}
                       />
                     )
                   ) : (
-                    <p style={hasValue ? styles.fieldValue : styles.fieldPlaceholder}>
+                    <p
+                      style={
+                        hasValue ? styles.fieldValue : styles.fieldPlaceholder
+                      }
+                    >
                       {value || field.placeholder}
                     </p>
                   )}
@@ -360,42 +446,45 @@ function App() {
               )
             })}
           </div>
-        </section>
-
-        {/* アーキテクチャ説明 */}
-        <section style={styles.archSection}>
-          <h3 style={styles.archTitle}>アーキテクチャ</h3>
-          <div style={styles.archFlow}>
-            {[
-              { icon: '🎙️', label: '音声入力', tech: 'Web Speech API', desc: 'ブラウザ内蔵' },
-              { icon: '📝', label: '文字起こし', tech: 'SpeechRecognition', desc: 'リアルタイム' },
-              { icon: '🧠', label: 'AI 解析', tech: 'WebLLM + Qwen3-1.7B', desc: 'WebGPU ローカル推論' },
-              { icon: '📄', label: '問診票', tech: '自動入力', desc: '手動編集可' },
-            ].map((step, i) => (
-              <div key={step.label} style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={styles.archStep}>
-                  <div style={styles.archStepIcon}>{step.icon}</div>
-                  <div style={styles.archStepLabel}>{step.label}</div>
-                  <div style={styles.archStepTech}>{step.tech}</div>
-                  <div style={styles.archStepDesc}>{step.desc}</div>
-                </div>
-                {i < 3 && <div style={styles.archArrow}>→</div>}
-              </div>
-            ))}
-          </div>
-          <div style={styles.archNote}>
-            <p style={{ margin: 0, fontWeight: 600, marginBottom: 4 }}>
-              💡 完全ブラウザローカルで動作
-            </p>
-            <p style={{ margin: 0, opacity: 0.8, fontSize: 13, lineHeight: 1.6 }}>
-              AI 解析は <code style={styles.code}>@mlc-ai/web-llm + Qwen3-1.7B</code>{' '}
-              を WebGPU で実行。サーバへのデータ送信は行われません。
-              初回の約 1GB のモデルダウンロード後はオフラインでも動作します。
-            </p>
-          </div>
-        </section>
+        </div>
       </main>
     </div>
+  )
+}
+
+// ── Inline SVG icons ──────────────────────────────────────────
+
+function RecordIcon({ isRecording }: { isRecording: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="currentColor"
+      style={{ flexShrink: 0 }}
+    >
+      {isRecording ? (
+        <rect x="2" y="2" width="8" height="8" rx="1" />
+      ) : (
+        <circle cx="6" cy="6" r="4" />
+      )}
+    </svg>
+  )
+}
+
+function SparkIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      style={{ flexShrink: 0 }}
+    >
+      <path d="M6 1 L7 5 L11 6 L7 7 L6 11 L5 7 L1 6 L5 5 Z" />
+    </svg>
   )
 }
 

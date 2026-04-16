@@ -3,17 +3,7 @@
 // Worker 分離で推論。API は既存 createWebLLMExtractor と同じ Extractor インターフェース。
 
 import { supportsWebGPU } from "./webgpu";
-import { parseExtractionResponse } from "./prompt";
-
-// Qwen3/3.5 reasoning の <think>...</think> を後処理で除去。
-// prompt.ts に同等ヘルパがある feat/model-selector-and-think-strip 側では
-// そちらを利用するが、この spike ブランチは main 起点のため内蔵する。
-function stripThinkTags(raw: string): string {
-  let out = raw.replace(/<think>[\s\S]*?<\/think>/gi, "");
-  const idx = out.toLowerCase().indexOf("</think>");
-  if (idx !== -1) out = out.slice(idx + "</think>".length);
-  return out.replace(/<\/?think>/gi, "").trim();
-}
+import { parseExtractionResponse, stripThinkTags } from "./prompt";
 import type {
   Extractor,
   ExtractorError,
