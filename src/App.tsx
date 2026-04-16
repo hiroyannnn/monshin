@@ -48,7 +48,7 @@ function App() {
   const handleLoadModel = useCallback(async () => {
     try {
       await extractor.load()
-      flashStatus('✅ モデルのロードが完了しました')
+      flashStatus('モデルのロードが完了しました')
     } catch {
       // エラーは extractor.error に反映されている
     }
@@ -59,7 +59,7 @@ function App() {
     try {
       const result = await extractor.extract(transcript)
       setForm((prev) => mergeFields(prev, result.fields))
-      flashStatus('✅ フィールドの抽出が完了しました')
+      flashStatus('フィールドの抽出が完了しました')
     } catch {
       // extractor.error に反映
     }
@@ -68,7 +68,7 @@ function App() {
   const handleLoadSample = useCallback(() => {
     transcriber.stop()
     transcriber.setFinalText(SAMPLE_TEXT)
-    flashStatus('📋 サンプルテキストを読み込みました')
+    flashStatus('サンプルテキストを読み込みました')
   }, [transcriber, flashStatus])
 
   const handleReset = useCallback(() => {
@@ -78,14 +78,14 @@ function App() {
   }, [transcriber])
 
   const listeningMessage = useMemo(() => {
-    if (isListening) return '🎙️ 録音中… 患者さんの症状を話してください'
-    if (isInferencing) return '🧠 AI が問診内容を解析中…'
+    if (isListening) return '録音中 — 患者さんの症状を話してください'
+    if (isInferencing) return 'AI が問診内容を解析中…'
     if (isDownloading) {
       const pct =
         extractor.progress?.progress !== null && extractor.progress?.progress !== undefined
           ? ` (${Math.round(extractor.progress.progress * 100)}%)`
           : ''
-      return `⬇️ モデルをロード中…${pct}`
+      return `モデルをロード中…${pct}`
     }
     return status
   }, [isListening, isInferencing, isDownloading, extractor.progress, status])
@@ -100,9 +100,7 @@ function App() {
             <div style={styles.logoIcon}>問</div>
             <div>
               <h1 style={styles.title}>問診アシスタント</h1>
-              <p style={styles.subtitle}>
-                音声 → 文字起こし → ブラウザローカル AI で自動入力
-              </p>
+              <p style={styles.subtitle}>音声 → AI → 自動入力</p>
             </div>
           </div>
           <div style={styles.badge}>
@@ -117,7 +115,7 @@ function App() {
         {error && <div style={styles.errorBar}>{error}</div>}
         {extractorUnsupported && (
           <div style={styles.warningBar}>
-            ⚠️ お使いのブラウザは WebGPU 未対応のため、AI 自動入力は使えません。
+            お使いのブラウザは WebGPU 未対応のため、AI 自動入力は使えません。
             手動での入力は可能です。Chrome 113+ / Edge 113+ / Safari 18+ を推奨します。
           </div>
         )}
@@ -128,14 +126,14 @@ function App() {
             <div style={{ fontSize: 13 }}>
               {isDownloading ? (
                 <>
-                  <strong>モデルロード中…</strong>{' '}
+                  <strong style={{ color: '#f0f0f0' }}>モデルロード中…</strong>{' '}
                   <span style={{ color: colors.textMuted, fontSize: 12 }}>
                     {extractor.progress?.text ?? '初回は約 1GB のダウンロードが必要です'}
                   </span>
                 </>
-              ) : (
+                ) : (
                 <>
-                  <strong>AI 自動入力を有効化</strong>{' '}
+                  <strong style={{ color: '#f0f0f0' }}>AI 自動入力を有効化</strong>{' '}
                   <span style={{ color: colors.textMuted, fontSize: 12 }}>
                     初回は約 1GB のモデルをダウンロードします (2 回目以降はキャッシュ)
                   </span>
@@ -159,7 +157,7 @@ function App() {
                 onClick={() => void handleLoadModel()}
                 style={{ ...styles.btn, ...styles.btnPrimary, padding: '10px 16px' }}
               >
-                🧠 モデルをロード
+                モデルをロード
               </button>
             ) : (
               <button
@@ -184,7 +182,7 @@ function App() {
                 opacity: transcriber.supported ? 1 : 0.4,
               }}
             >
-              <span style={styles.btnIcon}>{isListening ? '⏹' : '🎙️'}</span>
+              <span style={styles.btnIcon}>{isListening ? '■' : '●'}</span>
               <span>{isListening ? '録音停止' : '録音開始'}</span>
               {isListening && <span style={styles.pulse} />}
             </button>
@@ -198,7 +196,7 @@ function App() {
                 opacity: canExtract && !isInferencing ? 1 : 0.5,
               }}
             >
-              <span style={styles.btnIcon}>🧠</span>
+              <span style={styles.btnIcon}>◆</span>
               <span>{isInferencing ? '解析中…' : 'AI 解析'}</span>
             </button>
 
@@ -206,12 +204,12 @@ function App() {
               onClick={handleLoadSample}
               style={{ ...styles.btn, ...styles.btnGhost }}
             >
-              <span style={styles.btnIcon}>📋</span>
+              <span style={styles.btnIcon}>≡</span>
               <span>サンプル</span>
             </button>
 
             <button onClick={handleReset} style={{ ...styles.btn, ...styles.btnGhost }}>
-              <span style={styles.btnIcon}>🔄</span>
+              <span style={styles.btnIcon}>↺</span>
               <span>リセット</span>
             </button>
           </div>
@@ -221,7 +219,7 @@ function App() {
         <section style={styles.transcriptSection}>
           <div style={styles.transcriptHeader}>
             <span style={styles.sectionTitle}>
-              <span style={{ opacity: 0.6 }}>💬</span> 発話テキスト
+              発話テキスト
               {isListening && (
                 <span style={styles.liveBadge}>
                   <span style={styles.liveDot} /> LIVE
@@ -253,9 +251,7 @@ function App() {
 
         {/* 問診票 */}
         <section style={styles.formSection}>
-          <h2 style={styles.formTitle}>
-            <span style={{ opacity: 0.6 }}>📄</span> 問診票
-          </h2>
+          <h2 style={styles.formTitle}>問診票</h2>
           <div style={styles.fieldGrid}>
             {FIELD_DEFINITIONS.map((field) => {
               const isEditing = editingField === field.key
@@ -318,10 +314,10 @@ function App() {
           <h3 style={styles.archTitle}>アーキテクチャ</h3>
           <div style={styles.archFlow}>
             {[
-              { icon: '🎙️', label: '音声入力', tech: 'Web Speech API', desc: 'ブラウザ内蔵' },
-              { icon: '📝', label: '文字起こし', tech: 'SpeechRecognition', desc: 'リアルタイム' },
-              { icon: '🧠', label: 'AI 解析', tech: 'WebLLM + Qwen3-1.7B', desc: 'WebGPU ローカル推論' },
-              { icon: '📄', label: '問診票', tech: '自動入力', desc: '手動編集可' },
+              { icon: '●', label: '音声入力', tech: 'Web Speech API', desc: 'ブラウザ内蔵' },
+              { icon: '≡', label: '文字起こし', tech: 'SpeechRecognition', desc: 'リアルタイム' },
+              { icon: '◆', label: 'AI 解析', tech: 'WebLLM + Qwen3-1.7B', desc: 'WebGPU ローカル推論' },
+              { icon: '▣', label: '問診票', tech: '自動入力', desc: '手動編集可' },
             ].map((step, i) => (
               <div key={step.label} style={{ display: 'flex', alignItems: 'center' }}>
                 <div style={styles.archStep}>
@@ -335,8 +331,8 @@ function App() {
             ))}
           </div>
           <div style={styles.archNote}>
-            <p style={{ margin: 0, fontWeight: 600, marginBottom: 4 }}>
-              💡 完全ブラウザローカルで動作
+            <p style={{ margin: 0, fontWeight: 600, marginBottom: 4, color: '#f0f0f0' }}>
+              完全ブラウザローカルで動作
             </p>
             <p style={{ margin: 0, opacity: 0.8, fontSize: 13, lineHeight: 1.6 }}>
               AI 解析は <code style={styles.code}>@mlc-ai/web-llm + Qwen3-1.7B</code>{' '}
