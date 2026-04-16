@@ -104,6 +104,9 @@ export function createWebLLMExtractor(
       case 'progress':
         listeners.onProgress?.(event.progress)
         return
+      case 'stream_chunk':
+        listeners.onStreamChunk?.(event.mode, event.delta)
+        return
       case 'loaded': {
         const p = pending
         pending = null
@@ -159,6 +162,7 @@ export function createWebLLMExtractor(
   }
 
   function extractSingle(text: string, mode: 'fields' | 'summary'): Promise<string> {
+    listeners.onPassStart?.(mode)
     return new Promise<string>((resolve, reject) => {
       pending = { kind: 'extract', resolve, reject }
       send({ type: 'extract', transcript: text, mode })

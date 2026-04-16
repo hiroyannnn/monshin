@@ -69,16 +69,25 @@ async function handleExtract(transcript: string, mode: 'fields' | 'summary') {
     // response_format は WebLLM/XGrammar のバグ (CompileJSONSchema で
     // BindingError: Cannot pass non-string to std::string) を踏むため指定しない。
     // プロンプトで JSON 形式を明示し、parseExtractionResponse で緩く復元する。
-    const response = await engine.chat.completions.create({
+    // stream: true でトークンを逐次送出し UI の進捗表示に利用する。
+    const stream = await engine.chat.completions.create({
       messages,
       temperature: 0.1,
       max_tokens: mode === 'fields' ? 600 : 300,
+      stream: true,
       extra_body: {
         enable_thinking: false,
       },
     })
 
-    const content = response.choices[0]?.message?.content ?? ''
+    let content = ''
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? ''
+      if (delta) {
+        content += delta
+        post({ type: 'stream_chunk', mode, delta })
+      }
+    }
     post({ type: 'result', raw: content })
   } catch (e) {
     post({ type: 'error', code: classifyError(e), message: toErrorMessage(e) })

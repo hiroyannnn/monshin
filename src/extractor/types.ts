@@ -39,8 +39,14 @@ export interface ExtractionResult {
   rawJson: string
 }
 
+export type ExtractionPass = 'fields' | 'summary'
+
 export interface ExtractorListeners {
   onProgress?: (progress: ExtractionProgress) => void
+  /** 推論中のトークンストリーム。mode ごとに届く。 */
+  onStreamChunk?: (pass: ExtractionPass, delta: string) => void
+  /** パスが切り替わったタイミング (パス開始時に発火) */
+  onPassStart?: (pass: ExtractionPass) => void
   onError?: (error: ExtractorError) => void
   onStateChange?: (state: ExtractorState) => void
 }

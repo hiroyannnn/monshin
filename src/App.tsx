@@ -79,7 +79,17 @@ function App() {
 
   const listeningMessage = useMemo(() => {
     if (isListening) return '🎙️ 録音中… 患者さんの症状を話してください'
-    if (isInferencing) return '🧠 AI が問診内容を解析中…'
+    if (isInferencing) {
+      const passLabel =
+        extractor.stream.currentPass === 'summary'
+          ? '2/2 要約を生成中'
+          : '1/2 問診票を抽出中'
+      const secs =
+        extractor.stream.elapsedMs !== null
+          ? ` · ${(extractor.stream.elapsedMs / 1000).toFixed(1)}秒経過`
+          : ''
+      return `🧠 ${passLabel}${secs}`
+    }
     if (isDownloading) {
       const pct =
         extractor.progress?.progress !== null && extractor.progress?.progress !== undefined
@@ -88,7 +98,15 @@ function App() {
       return `⬇️ モデルをロード中…${pct}`
     }
     return status
-  }, [isListening, isInferencing, isDownloading, extractor.progress, status])
+  }, [
+    isListening,
+    isInferencing,
+    isDownloading,
+    extractor.progress,
+    extractor.stream.currentPass,
+    extractor.stream.elapsedMs,
+    status,
+  ])
 
   const error = transcriber.error?.message ?? extractor.error?.message ?? null
 
@@ -114,6 +132,27 @@ function App() {
 
       <main style={styles.main}>
         {listeningMessage && <div style={styles.statusBar}>{listeningMessage}</div>}
+        {isInferencing && extractor.stream.partialText && (
+          <div style={styles.streamPreview}>
+            <div style={styles.streamPreviewLabel}>
+              {extractor.stream.currentPass === 'summary'
+                ? '要約プレビュー'
+                : 'フィールド抽出プレビュー'}
+            </div>
+            <pre style={styles.streamPreviewBody}>
+              {extractor.stream.partialText}
+              <span style={styles.streamCaret}>▊</span>
+            </pre>
+          </div>
+        )}
+        {isInferencing &&
+          extractor.stream.elapsedMs !== null &&
+          extractor.stream.elapsedMs > 30000 && (
+            <div style={styles.warningBar}>
+              ⏳ 30 秒以上経過しています。お使いの GPU の性能によっては 1〜2 分かかる場合があります。
+              キャンセルしてテキストを短くするか、そのままお待ちください。
+            </div>
+          )}
         {error && <div style={styles.errorBar}>{error}</div>}
         {extractorUnsupported && (
           <div style={styles.warningBar}>
@@ -189,18 +228,28 @@ function App() {
               {isListening && <span style={styles.pulse} />}
             </button>
 
-            <button
-              onClick={() => void handleExtract()}
-              disabled={!canExtract || isInferencing}
-              style={{
-                ...styles.btn,
-                ...styles.btnAccent,
-                opacity: canExtract && !isInferencing ? 1 : 0.5,
-              }}
-            >
-              <span style={styles.btnIcon}>🧠</span>
-              <span>{isInferencing ? '解析中…' : 'AI 解析'}</span>
-            </button>
+            {isInferencing ? (
+              <button
+                onClick={() => extractor.cancel()}
+                style={{ ...styles.btn, ...styles.btnRecording }}
+              >
+                <span style={styles.btnIcon}>⏹</span>
+                <span>解析を中止</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => void handleExtract()}
+                disabled={!canExtract}
+                style={{
+                  ...styles.btn,
+                  ...styles.btnAccent,
+                  opacity: canExtract ? 1 : 0.5,
+                }}
+              >
+                <span style={styles.btnIcon}>🧠</span>
+                <span>AI 解析</span>
+              </button>
+            )}
 
             <button
               onClick={handleLoadSample}
