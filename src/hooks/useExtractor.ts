@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createWebLLMExtractor } from '../extractor/webllm'
+import { createTransformersExtractor } from '../extractor/transformers'
 import type {
   ExtractionPass,
   ExtractionProgress,
@@ -11,6 +12,15 @@ import type {
   ExtractorError,
   ExtractorState,
 } from '../extractor/types'
+
+// ?extractor=transformers で Transformers.js v4 実装に切替 (issue #8 spike)。
+function selectExtractor(): Extractor {
+  if (typeof window !== 'undefined') {
+    const param = new URLSearchParams(window.location.search).get('extractor')
+    if (param === 'transformers') return createTransformersExtractor()
+  }
+  return createWebLLMExtractor()
+}
 
 export interface ExtractorStreamState {
   /** 今動いているパス (fields / summary)。止まっていれば null */
@@ -49,7 +59,7 @@ export function useExtractor(): UseExtractorResult {
   const startedAtRef = useRef<number | null>(null)
 
   useEffect(() => {
-    const ext = createWebLLMExtractor()
+    const ext = selectExtractor()
     extractorRef.current = ext
     setSupported(ext.supports())
     setState(ext.state)
