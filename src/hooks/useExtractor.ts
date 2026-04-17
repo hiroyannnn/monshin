@@ -1,8 +1,8 @@
-// WebLLM Extractor を React ライフサイクルに繋ぎこむフック。
+// Transformers.js Extractor を React ライフサイクルに繋ぎこむフック。
 // load() は明示的ボタンで呼ぶ (ページ開いた瞬間にダウンロードしないため)。
 
 import { useEffect, useRef, useState } from 'react'
-import { createWebLLMExtractor } from '../extractor/webllm'
+import { createTransformersExtractor } from '../extractor/transformers'
 import type {
   ExtractionPass,
   ExtractionProgress,
@@ -36,7 +36,7 @@ const EMPTY_STREAM: ExtractorStreamState = {
 }
 
 /**
- * @param modelId 使用する WebLLM モデル ID。変わると Extractor を作り直す。
+ * @param modelId 使用する Transformers.js モデル ID (ONNX Hub)。変わると Extractor を作り直す。
  */
 export function useExtractor(modelId: string): UseExtractorResult {
   const extractorRef = useRef<Extractor | null>(null)
@@ -49,7 +49,7 @@ export function useExtractor(modelId: string): UseExtractorResult {
   const startedAtRef = useRef<number | null>(null)
 
   useEffect(() => {
-    const ext = createWebLLMExtractor({ modelId })
+    const ext = createTransformersExtractor({ modelId })
     extractorRef.current = ext
     setSupported(ext.supports())
     setState(ext.state)

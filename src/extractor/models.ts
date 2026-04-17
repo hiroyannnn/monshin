@@ -1,6 +1,6 @@
-// 選択可能な WebLLM モデル一覧。
-// ID は @mlc-ai/web-llm の prebuilt app config に登録されているものを利用する。
-// 新世代 (Qwen3.5 / Qwen3) を中心に、サイズの昇順で並べる。
+// 選択可能な Transformers.js (ONNX) モデル一覧。
+// ID は HuggingFace Hub の onnx-community org で配布されている ONNX 変換済モデル。
+// Qwen3 / Qwen3.5 シリーズをサイズ昇順で並べる。
 
 export interface ModelOption {
   id: string
@@ -15,40 +15,40 @@ export interface ModelOption {
 
 export const AVAILABLE_MODELS: readonly ModelOption[] = [
   {
-    id: 'Qwen3.5-0.8B-q4f16_1-MLC',
-    label: 'Qwen3.5 0.8B',
-    size: '約 500MB',
-    sizeGb: 0.5,
-    japanese: '◎',
-    note: '最新世代・最軽量。内蔵 GPU でも快適',
+    id: 'onnx-community/Qwen3-0.6B-ONNX',
+    label: 'Qwen3 0.6B',
+    size: '約 600MB',
+    sizeGb: 0.6,
+    japanese: '◯',
+    note: '最軽量。内蔵 GPU でも動きやすい',
   },
   {
-    id: 'Qwen3-1.7B-q4f16_1-MLC',
-    label: 'Qwen3 1.7B',
-    size: '約 1.0GB',
-    sizeGb: 1.0,
+    id: 'onnx-community/Qwen3.5-0.8B-ONNX',
+    label: 'Qwen3.5 0.8B (推奨)',
+    size: '約 1.3GB',
+    sizeGb: 1.3,
     japanese: '◎',
-    note: 'thinking 対応の定番サイズ',
+    note: '最新世代・軽量。デフォルト',
   },
   {
-    id: 'Qwen3.5-2B-q4f16_1-MLC',
-    label: 'Qwen3.5 2B (推奨)',
-    size: '約 1.2GB',
-    sizeGb: 1.2,
-    japanese: '◎',
-    note: '最新世代・バランス型。デフォルト',
-  },
-  {
-    id: 'Qwen3-4B-q4f16_1-MLC',
-    label: 'Qwen3 4B',
+    id: 'onnx-community/Qwen3.5-2B-ONNX',
+    label: 'Qwen3.5 2B',
     size: '約 2.5GB',
     sizeGb: 2.5,
     japanese: '◎',
-    note: '高精度。ディスクリート GPU 推奨',
+    note: '高品質。指示追従が安定',
+  },
+  {
+    id: 'onnx-community/Qwen3.5-4B-ONNX',
+    label: 'Qwen3.5 4B',
+    size: '約 4.5GB',
+    sizeGb: 4.5,
+    japanese: '◎',
+    note: '最高精度。ディスクリート GPU 推奨',
   },
 ]
 
-export const DEFAULT_MODEL_ID = 'Qwen3.5-2B-q4f16_1-MLC'
+export const DEFAULT_MODEL_ID = 'onnx-community/Qwen3.5-0.8B-ONNX'
 
 export function findModel(id: string): ModelOption | undefined {
   return AVAILABLE_MODELS.find((m) => m.id === id)

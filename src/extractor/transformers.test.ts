@@ -1,14 +1,13 @@
-// WebLLMExtractor の単体テスト。
-// Worker は MockWorker に差し替えて、メッセージプロトコルの往復だけを検証する。
+// Transformers.js Extractor の単体テスト。
+// 実際の ONNX/WebGPU パイプラインは起動せず、MockWorker でメッセージプロトコル
+// 往復と状態遷移のみを検証する。
+// PR #9 レビュー指摘の回帰テストをあわせて含む。
 
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createWebLLMExtractor } from './webllm'
+import { describe, it, expect, afterEach } from 'vitest'
+import { createTransformersExtractor } from './transformers'
 import type { ExtractorState } from './types'
 import type { WorkerRequest, WorkerEvent } from './worker-protocol'
 
-interface MaybeGpuNavigator {
-  gpu?: unknown
-}
 function setNavigatorGpu(value: unknown) {
   Object.defineProperty(globalThis, 'navigator', {
     value: Object.assign({}, globalThis.navigator, { gpu: value }),
@@ -16,7 +15,6 @@ function setNavigatorGpu(value: unknown) {
   })
 }
 
-// ── Worker 風オブジェクト ──
 class MockWorker {
   onmessage: ((e: { data: WorkerEvent }) => void) | null = null
   onerror: ((e: unknown) => void) | null = null
@@ -36,13 +34,13 @@ class MockWorker {
 
 function makeExtractor() {
   const worker = new MockWorker()
-  const ext = createWebLLMExtractor({
+  const ext = createTransformersExtractor({
     createWorker: () => worker as unknown as Worker,
   })
   return { ext, worker }
 }
 
-describe('createWebLLMExtractor', () => {
+describe('createTransformersExtractor', () => {
   afterEach(() => {
     setNavigatorGpu(undefined)
   })
@@ -90,7 +88,7 @@ describe('createWebLLMExtractor', () => {
       const loadPromise = ext.load()
       worker.emit({
         type: 'progress',
-        progress: { progress: 0.5, text: 'Downloading...' },
+        progress: { progress: 0.5, text: 'モデルをダウンロード中…' },
       })
       worker.emit({ type: 'loaded' })
       await loadPromise
@@ -120,21 +118,16 @@ describe('createWebLLMExtractor', () => {
     it('runs 2-pass extraction (fields + summary) and merges result', async () => {
       setNavigatorGpu({})
       const { ext, worker } = makeExtractor()
-
-      // load
       const loadP = ext.load()
       worker.emit({ type: 'loaded' })
       await loadP
 
       const extractP = ext.extract('頭が痛い。山田太郎、45歳。')
-      // 最初のメッセージは load、続いて fields
       expect(worker.posted.at(-1)).toMatchObject({ type: 'extract', mode: 'fields' })
       worker.emit({
         type: 'result',
         raw: '{"name":"山田太郎","age":"45歳","chief_complaint":"頭痛"}',
       })
-      // 続いて summary
-      // (非同期タスクをフラッシュ)
       await Promise.resolve()
       await Promise.resolve()
       expect(worker.posted.at(-1)).toMatchObject({ type: 'extract', mode: 'summary' })
@@ -162,8 +155,9 @@ describe('createWebLLMExtractor', () => {
       const result = await extractP
       expect(result.fields.name).toBe('太郎')
       expect(result.fields.summary).toBeUndefined()
-      // fields が取れていれば ready に戻る
-      expect(ext.state).toBe('ready')
+      // summary の worker error 経由で state は failed に遷移済み。
+      // extractImpl はそれを上書きしない (PR #9 review 回帰防止)。
+      expect(ext.state).toBe('failed')
     })
 
     it('rejects extract when fields pass fails', async () => {
@@ -184,39 +178,25 @@ describe('createWebLLMExtractor', () => {
       const { ext } = makeExtractor()
       await expect(ext.extract('x')).rejects.toThrow()
     })
-  })
 
-  describe('streaming', () => {
-    it('forwards stream_chunk events and fires onPassStart per pass', async () => {
+    // 回帰テスト: PR #9 devin #7
+    it('transitions state to failed and emits error when fields raw is not valid JSON', async () => {
       setNavigatorGpu({})
       const { ext, worker } = makeExtractor()
       const loadP = ext.load()
       worker.emit({ type: 'loaded' })
       await loadP
 
-      const chunks: Array<{ pass: string; delta: string }> = []
-      const passes: string[] = []
-      ext.setListeners({
-        onStreamChunk: (pass, delta) => chunks.push({ pass, delta }),
-        onPassStart: (pass) => passes.push(pass),
-      })
+      const errors: Array<{ code: string; message: string }> = []
+      ext.setListeners({ onError: (err) => errors.push(err) })
 
-      const extractP = ext.extract('頭痛。')
-      // fields pass: 複数チャンクで JSON を送出
-      worker.emit({ type: 'stream_chunk', mode: 'fields', delta: '{"name":"太' })
-      worker.emit({ type: 'stream_chunk', mode: 'fields', delta: '郎"}' })
-      worker.emit({ type: 'result', raw: '{"name":"太郎"}' })
-      await Promise.resolve()
-      // summary pass
-      worker.emit({ type: 'stream_chunk', mode: 'summary', delta: '頭痛を' })
-      worker.emit({ type: 'stream_chunk', mode: 'summary', delta: '訴える' })
-      worker.emit({ type: 'result', raw: '頭痛を訴える' })
-
-      await extractP
-      expect(passes).toEqual(['fields', 'summary'])
-      expect(chunks.map((c) => c.delta).join('')).toBe(
-        '{"name":"太郎"}頭痛を訴える',
-      )
+      const extractP = ext.extract('x')
+      // JSON で始まらない出力: parseExtractionResponse が throw する。
+      worker.emit({ type: 'result', raw: 'this is not json at all' })
+      await expect(extractP).rejects.toThrow()
+      expect(ext.state).toBe('failed')
+      expect(errors[0]?.code).toBe('inference_failed')
+      expect(errors[0]?.message).toMatch(/JSON/)
     })
   })
 
@@ -232,8 +212,45 @@ describe('createWebLLMExtractor', () => {
       ext.cancel()
       await expect(extractP).rejects.toThrow()
       expect(worker.terminated).toBe(true)
-      // cancel 後は idle に戻す (再 load を促す)
       expect(ext.state).toBe('idle')
+    })
+
+    // 回帰テスト: PR #9 devin #6
+    it('keeps state at idle when canceled during summary pass (does not revert to ready)', async () => {
+      setNavigatorGpu({})
+      const { ext, worker } = makeExtractor()
+      const loadP = ext.load()
+      worker.emit({ type: 'loaded' })
+      await loadP
+
+      const extractP = ext.extract('x')
+      // fields 成功
+      worker.emit({ type: 'result', raw: '{"name":"太郎"}' })
+      await Promise.resolve()
+      await Promise.resolve()
+      // summary 中にキャンセル (summary pending を reject させ、fields のみで解決)
+      ext.cancel()
+      const result = await extractP
+      expect(result.fields.name).toBe('太郎')
+      expect(result.fields.summary).toBeUndefined()
+      // cancel で state=idle になっているはず。extractImpl が setState("ready") で
+      // 上書きしていないこと。
+      expect(ext.state).toBe('idle')
+    })
+  })
+
+  describe('pending slot supersession', () => {
+    // 回帰テスト: PR #9 coderabbit #2
+    it('rejects the previous pending promise when a new request starts', async () => {
+      setNavigatorGpu({})
+      const { ext, worker } = makeExtractor()
+      // load の pending を立てたまま、もう一度 load を呼ぶ
+      const first = ext.load()
+      const second = ext.load()
+      // 2 つ目を settle させる
+      worker.emit({ type: 'loaded' })
+      await expect(first).rejects.toThrow(/superseded/)
+      await expect(second).resolves.toBeUndefined()
     })
   })
 
@@ -241,7 +258,6 @@ describe('createWebLLMExtractor', () => {
     it('terminates the worker and sets state disposed', async () => {
       setNavigatorGpu({})
       const { ext, worker } = makeExtractor()
-      // Worker は lazy 生成なので load 経由で作らせる
       const loadP = ext.load()
       worker.emit({ type: 'loaded' })
       await loadP
@@ -257,9 +273,21 @@ describe('createWebLLMExtractor', () => {
       ext.dispose()
       expect(ext.state).toBe('disposed')
     })
+
+    // 回帰テスト: PR #9 coderabbit / devin (disposeImpl pending drop)
+    it('rejects in-flight pending request when disposed mid-flight', async () => {
+      setNavigatorGpu({})
+      const { ext, worker } = makeExtractor()
+      const loadP = ext.load()
+      worker.emit({ type: 'loaded' })
+      await loadP
+
+      const extractP = ext.extract('x')
+      // fields 応答前に dispose()
+      ext.dispose()
+      await expect(extractP).rejects.toThrow(/disposed/)
+      expect(worker.terminated).toBe(true)
+      expect(ext.state).toBe('disposed')
+    })
   })
 })
-
-// vi.fn の参照だけ使うためのダミー (lint 回避)
-void vi
-void ({} as MaybeGpuNavigator)
