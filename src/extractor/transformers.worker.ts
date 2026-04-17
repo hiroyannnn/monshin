@@ -1,5 +1,5 @@
 // Web Worker: Transformers.js (Hugging Face) による推論を別スレッドで実行する。
-// WebLLM 版 (webllm.worker.ts) と並行存在。spike/transformers-js-v4 で検証中。
+// メインスレッドからのリクエストを受け取り、結果/進捗を postMessage で返す。
 
 /// <reference lib="webworker" />
 
@@ -78,7 +78,7 @@ async function handleExtract(transcript: string, mode: "fields" | "summary") {
     const messages =
       mode === "fields" ? buildExtractionMessages(transcript) : buildSummaryMessages(transcript);
 
-    // トークン逐次送出用ストリーマー。WebLLM の stream_chunk 相当を発火。
+    // トークン逐次送出用ストリーマー。UI の進捗表示に利用する。
     const streamer = new TextStreamer(generator.tokenizer, {
       skip_prompt: true,
       skip_special_tokens: true,

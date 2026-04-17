@@ -1,5 +1,5 @@
 // 問診票フィールド抽出サービスの抽象。
-// 実装: WebLLMExtractor (将来: Transformers.js, サーバサイド LLM 等)
+// 実装: createTransformersExtractor (Hugging Face Transformers.js / WebGPU)
 
 import type { MonshinFields } from '../domain/monshin'
 

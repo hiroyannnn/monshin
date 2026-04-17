@@ -129,7 +129,7 @@ function App() {
           </div>
           <div style={styles.badge}>
             <span style={styles.badgeDot} />
-            WebLLM · {selectedModel?.label ?? modelId}
+            Transformers.js · {selectedModel?.label ?? modelId}
           </div>
         </div>
       </header>
@@ -342,7 +342,7 @@ function App() {
               {[
                 { icon: 'MIC', label: '音声入力', tech: 'Web Speech API', desc: 'ブラウザ内蔵' },
                 { icon: 'TXT', label: '文字起こし', tech: 'SpeechRecognition', desc: 'リアルタイム' },
-                { icon: 'AI', label: 'AI 解析', tech: 'WebLLM · Qwen3', desc: 'WebGPU' },
+                { icon: 'AI', label: 'AI 解析', tech: 'Transformers.js · Qwen3', desc: 'WebGPU' },
                 { icon: 'FRM', label: '問診票', tech: '自動入力', desc: '手動編集可' },
               ].map((step, i) => (
                 <div key={step.label} style={{ display: 'flex', alignItems: 'center' }}>
@@ -360,7 +360,7 @@ function App() {
               <span style={{ color: colors.text, fontWeight: 500 }}>
                 完全ブラウザローカル。
               </span>{' '}
-              <code style={styles.code}>@mlc-ai/web-llm</code> +{' '}
+              <code style={styles.code}>@huggingface/transformers</code> +{' '}
               <code style={styles.code}>{selectedModel?.label ?? 'Qwen3'}</code>{' '}
               を WebGPU で実行。サーバへのデータ送信なし。
             </div>

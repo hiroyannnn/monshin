@@ -21,9 +21,6 @@ importers:
       '@huggingface/transformers':
         specifier: ^4.1.0
         version: 4.1.0
-      '@mlc-ai/web-llm':
-        specifier: ^0.2.82
-        version: 0.2.82
       react:
         specifier: ^19.2.4
         version: 19.2.5
@@ -451,9 +448,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@mlc-ai/web-llm@0.2.82':
-    resolution: {integrity: sha512-ONhW+28PPVSUI1m0RkJcm7suwc47b65i5b/rTEIADq5I22p1+9uf/CBbDPRkkjj1WJB9s8oFp0ywAW0NY1G6fg==}
 
   '@oxc-project/runtime@0.124.0':
     resolution: {integrity: sha512-sSg6n37J3w3mM4odFvRqzQENf6+qxKnvStr/gU0FgRRg1VE/4MqryLd9PJmE0a7K5xlDfbrctBtSagaFH6ij9Q==}
@@ -1530,10 +1524,6 @@ packages:
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
 
-  loglevel@1.9.2:
-    resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
-    engines: {node: '>= 0.6.0'}
-
   long@5.3.2:
     resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
 
@@ -2264,10 +2254,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@mlc-ai/web-llm@0.2.82':
-    dependencies:
-      loglevel: 1.9.2
 
   '@oxc-project/runtime@0.124.0': {}
 
@@ -3099,8 +3085,6 @@ snapshots:
       p-locate: 5.0.0
 
   lodash.merge@4.6.2: {}
-
-  loglevel@1.9.2: {}
 
   long@5.3.2: {}
 

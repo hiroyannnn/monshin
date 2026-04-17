@@ -80,7 +80,7 @@ export function buildSummaryMessages(transcript: string): ChatMessage[] {
 
 /**
  * Qwen3 等の reasoning モデルが吐く <think>...</think> を除去する。
- * enable_thinking: false でも WebLLM/モデル側の都合で漏れることがあるため
+ * generation_config で抑制してもモデル側の都合で漏れることがあるため
  * 後処理でも保険的に除去する。
  */
 export function stripThinkTags(raw: string): string {

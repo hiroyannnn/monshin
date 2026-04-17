@@ -1,8 +1,8 @@
 // Transformers.js (Hugging Face) ベースの Extractor。
-// spike/transformers-js-v4 (issue #8) での PoC 実装。
-// Worker 分離で推論。API は既存 createWebLLMExtractor と同じ Extractor インターフェース。
+// Worker 分離で WebGPU 推論を実行する。
 
 import { supportsWebGPU } from "./webgpu";
+import { DEFAULT_MODEL_ID } from "./models";
 import { parseExtractionResponse, stripThinkTags } from "./prompt";
 import type {
   Extractor,
@@ -13,10 +13,6 @@ import type {
 } from "./types";
 import type { WorkerEvent, WorkerRequest } from "./worker-protocol";
 import type { MonshinFields } from "../domain/monshin";
-
-// デフォルトは Qwen3.5 0.8B (最軽量・2026-02 リリース)。
-// ONNX 変換済モデルは onnx-community org で配布。
-export const DEFAULT_TRANSFORMERS_MODEL_ID = "onnx-community/Qwen3.5-0.8B-ONNX";
 
 export interface TransformersExtractorOptions {
   modelId?: string;
@@ -35,7 +31,7 @@ type PendingRequest =
   | { kind: "unload"; resolve: () => void; reject: (err: Error) => void };
 
 export function createTransformersExtractor(options: TransformersExtractorOptions = {}): Extractor {
-  const modelId = options.modelId ?? DEFAULT_TRANSFORMERS_MODEL_ID;
+  const modelId = options.modelId ?? DEFAULT_MODEL_ID;
   const createWorker = options.createWorker ?? defaultCreateWorker;
 
   let listeners: ExtractorListeners = {};
