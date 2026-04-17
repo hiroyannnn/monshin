@@ -214,9 +214,7 @@ function App() {
                   <div
                     style={{
                       ...styles.progressBarInner,
-                      width: `${Math.round(
-                        (extractor.progress?.progress ?? 0) * 100,
-                      )}%`,
+                      transform: `scaleX(${extractor.progress?.progress ?? 0})`,
                     }}
                   />
                 </div>

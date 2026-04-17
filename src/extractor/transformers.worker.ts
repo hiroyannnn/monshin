@@ -21,6 +21,56 @@ function post(event: WorkerEvent) {
   ctx.postMessage(event);
 }
 
+// 進捗集約: Transformers.js は file ごとに progress_callback が高頻度で発火する。
+// ファイル単位に loaded/total を積算し、100ms に一度だけメインへ post することで
+// UI の再レンダリング回数を抑え、ロード中のがたつきを防ぐ。
+type FileProgress = { loaded: number; total: number };
+const fileProgress = new Map<string, FileProgress>();
+let lastProgressPost = 0;
+let pendingProgressTimer: ReturnType<typeof setTimeout> | null = null;
+
+const PROGRESS_THROTTLE_MS = 120;
+
+function aggregateProgress(): number | null {
+  let loaded = 0;
+  let total = 0;
+  for (const f of fileProgress.values()) {
+    loaded += f.loaded;
+    total += f.total;
+  }
+  if (total <= 0) return null;
+  return Math.min(1, loaded / total);
+}
+
+function postAggregatedProgress() {
+  pendingProgressTimer = null;
+  lastProgressPost = performance.now();
+  const progress = aggregateProgress();
+  post({
+    type: "progress",
+    progress: {
+      progress,
+      text: "モデルをダウンロード中…",
+    },
+  });
+}
+
+function scheduleProgressPost() {
+  if (pendingProgressTimer !== null) return;
+  const elapsed = performance.now() - lastProgressPost;
+  const delay = Math.max(0, PROGRESS_THROTTLE_MS - elapsed);
+  pendingProgressTimer = setTimeout(postAggregatedProgress, delay);
+}
+
+function resetProgressState() {
+  fileProgress.clear();
+  lastProgressPost = 0;
+  if (pendingProgressTimer !== null) {
+    clearTimeout(pendingProgressTimer);
+    pendingProgressTimer = null;
+  }
+}
+
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   return String(e);
@@ -42,26 +92,30 @@ async function handleLoad(modelId: string) {
       post({ type: "loaded" });
       return;
     }
+    resetProgressState();
     const task: PipelineType = "text-generation";
     generator = (await pipeline(task, modelId, {
       device: "webgpu",
       dtype: "q4",
       progress_callback: (data: unknown) => {
-        // Transformers.js の進捗ペイロードは { status, progress, name, file, ... }
+        // Transformers.js の進捗ペイロードは { status, progress, name, file, loaded, total, ... }
         const rec = (data as Record<string, unknown>) ?? {};
         const status = typeof rec.status === "string" ? rec.status : "";
         const file = typeof rec.file === "string" ? rec.file : "";
-        const raw = rec.progress;
-        const progress = typeof raw === "number" && Number.isFinite(raw) ? raw / 100 : null;
-        post({
-          type: "progress",
-          progress: {
-            progress,
-            text: file ? `${status} ${file}` : status,
-          },
-        });
+        const loaded = typeof rec.loaded === "number" ? rec.loaded : 0;
+        const total = typeof rec.total === "number" ? rec.total : 0;
+        if (file && total > 0) {
+          if (status === "done") {
+            fileProgress.set(file, { loaded: total, total });
+          } else {
+            fileProgress.set(file, { loaded, total });
+          }
+        }
+        scheduleProgressPost();
       },
     })) as TextGenerationPipeline;
+    // 残った throttle を吐き切って 100% を確実に送る
+    postAggregatedProgress();
     loadedModelId = modelId;
     post({ type: "loaded" });
   } catch (e) {

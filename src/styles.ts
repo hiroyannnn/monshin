@@ -260,8 +260,11 @@ export const styles = {
   } satisfies CSSProperties,
   progressBarInner: {
     height: '100%',
+    width: '100%',
     background: colors.accent,
-    transition: 'width 0.3s ease',
+    transformOrigin: 'left center',
+    transition: 'transform 0.25s ease-out',
+    willChange: 'transform',
   } satisfies CSSProperties,
 
   // ─── Controls ─────────────────────────────────────────────
