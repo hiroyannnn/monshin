@@ -218,7 +218,13 @@ export function createTransformersExtractor(options: TransformersExtractorOption
       worker.terminate();
       worker = null;
     }
+    // setPending の不変条件 (pending は settle してから差替える) を守り、
+    // 呼び出し中の load() / extract() / unload() の await が永久保留に
+    // ならないようにする。useExtractor の useEffect cleanup から dispose
+    // される経路が実際にあるため必須。
+    const p = pending;
     pending = null;
+    if (p) p.reject(new Error("disposed"));
     listeners = {};
     setState("disposed");
   }

@@ -273,5 +273,21 @@ describe('createTransformersExtractor', () => {
       ext.dispose()
       expect(ext.state).toBe('disposed')
     })
+
+    // 回帰テスト: PR #9 coderabbit / devin (disposeImpl pending drop)
+    it('rejects in-flight pending request when disposed mid-flight', async () => {
+      setNavigatorGpu({})
+      const { ext, worker } = makeExtractor()
+      const loadP = ext.load()
+      worker.emit({ type: 'loaded' })
+      await loadP
+
+      const extractP = ext.extract('x')
+      // fields 応答前に dispose()
+      ext.dispose()
+      await expect(extractP).rejects.toThrow(/disposed/)
+      expect(worker.terminated).toBe(true)
+      expect(ext.state).toBe('disposed')
+    })
   })
 })
