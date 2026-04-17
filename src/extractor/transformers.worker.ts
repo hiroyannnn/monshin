@@ -76,14 +76,15 @@ function toErrorMessage(e: unknown): string {
   return String(e);
 }
 
-function classifyError(e: unknown): "oom" | "load_failed" | "inference_failed" | "unknown" {
+// エラー発生箇所 (load / inference) を明示的に受け取って分類する。
+// keyword マッチだと inference 中の fetch/load 系メッセージが load_failed に誤分類されるため、
+// OOM のみ優先判定しそれ以外は phase で決め打ちする。
+function classifyError(e: unknown, phase: "load" | "inference"): "oom" | "load_failed" | "inference_failed" {
   const msg = toErrorMessage(e).toLowerCase();
   if (msg.includes("out of memory") || msg.includes("oom") || msg.includes("allocation")) {
     return "oom";
   }
-  if (msg.includes("load") || msg.includes("download") || msg.includes("fetch"))
-    return "load_failed";
-  return "inference_failed";
+  return phase === "load" ? "load_failed" : "inference_failed";
 }
 
 async function handleLoad(modelId: string) {
@@ -119,7 +120,7 @@ async function handleLoad(modelId: string) {
     loadedModelId = modelId;
     post({ type: "loaded" });
   } catch (e) {
-    post({ type: "error", code: classifyError(e), message: toErrorMessage(e) });
+    post({ type: "error", code: classifyError(e, "load"), message: toErrorMessage(e) });
   }
 }
 
@@ -141,10 +142,10 @@ async function handleExtract(transcript: string, mode: "fields" | "summary") {
       },
     });
 
+    // do_sample: false で greedy デコード。temperature は greedy 時は無効かつ警告対象なので指定しない。
     const output = await generator(messages, {
       max_new_tokens: mode === "fields" ? 600 : 300,
       do_sample: false,
-      temperature: 0.1,
       streamer,
     });
 
@@ -161,7 +162,7 @@ async function handleExtract(transcript: string, mode: "fields" | "summary") {
 
     post({ type: "result", raw: content });
   } catch (e) {
-    post({ type: "error", code: classifyError(e), message: toErrorMessage(e) });
+    post({ type: "error", code: classifyError(e, "inference"), message: toErrorMessage(e) });
   }
 }
 

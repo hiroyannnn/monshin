@@ -39,6 +39,15 @@ export function createTransformersExtractor(options: TransformersExtractorOption
   let pending: PendingRequest | null = null;
   let state: ExtractorState = supportsWebGPU() ? "idle" : "unsupported";
 
+  // pending は単一スロットなので、前の Promise を必ず settle させてから差替える。
+  // これを怠ると呼び出し側の await が永久に保留する。
+  function setPending(next: PendingRequest) {
+    if (pending) {
+      pending.reject(new Error("superseded by another extractor request"));
+    }
+    pending = next;
+  }
+
   function setState(next: ExtractorState) {
     if (state === next) return;
     state = next;
@@ -56,7 +65,10 @@ export function createTransformersExtractor(options: TransformersExtractorOption
         handleWorkerEvent(ev.data);
       };
       worker.onerror = () => {
+        // message-based "error" 経路 (handleWorkerEvent) と挙動を揃え、
+        // state も failed に遷移させることで後続 extract() のガードが効くようにする。
         failPending("inference_failed", "Worker runtime error");
+        setState("failed");
       };
     }
     return worker;
@@ -127,7 +139,7 @@ export function createTransformersExtractor(options: TransformersExtractorOption
     if (state === "ready") return;
     setState("downloading");
     return new Promise<void>((resolve, reject) => {
-      pending = { kind: "load", resolve, reject };
+      setPending({ kind: "load", resolve, reject });
       send({ type: "load", modelId });
     });
   }
@@ -135,7 +147,7 @@ export function createTransformersExtractor(options: TransformersExtractorOption
   function extractSingle(text: string, mode: "fields" | "summary"): Promise<string> {
     listeners.onPassStart?.(mode);
     return new Promise<string>((resolve, reject) => {
-      pending = { kind: "extract", resolve, reject };
+      setPending({ kind: "extract", resolve, reject });
       send({ type: "extract", transcript: text, mode });
     });
   }
@@ -145,8 +157,24 @@ export function createTransformersExtractor(options: TransformersExtractorOption
       throw new Error(`Extractor が ready ではありません (state=${state})`);
     }
     setState("inferencing");
+
+    // fields パスは必須。worker error / cancel 経路では handleWorkerEvent /
+    // cancelImpl が既に state を failed / oom / idle に遷移させているので
+    // ここでは追加の state 変更はしない。
     const fieldsRaw = await extractSingle(text, "fields");
-    const parsed = parseExtractionResponse(fieldsRaw);
+
+    // parseExtractionResponse はメインスレッドで throw する可能性がある
+    // (モデルが JSON 以外を返した場合等)。state がリセットされず永久に
+    // inferencing になるのを防ぐ。
+    let parsed: ReturnType<typeof parseExtractionResponse>;
+    try {
+      parsed = parseExtractionResponse(fieldsRaw);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setState("failed");
+      emitError({ code: "inference_failed", message: `JSON パース失敗: ${message}` });
+      throw e;
+    }
     const fields: Partial<MonshinFields> = { ...parsed.fields };
 
     try {
@@ -154,10 +182,12 @@ export function createTransformersExtractor(options: TransformersExtractorOption
       const summary = stripThinkTags(summaryRaw);
       if (summary.length > 0) fields.summary = summary;
     } catch {
-      // summary は無くても問題ない
+      // summary は任意成功。worker error や cancel で state が
+      // failed / oom / idle に遷移している場合はそれを尊重し上書きしない。
     }
 
-    setState("ready");
+    // inferencing のまま抜けてきた (summary も成功、もしくはローカル失敗のみ) 場合だけ ready に戻す。
+    if (state === "inferencing") setState("ready");
     return { fields, rawJson: parsed.rawJson };
   }
 
@@ -178,7 +208,7 @@ export function createTransformersExtractor(options: TransformersExtractorOption
       return;
     }
     return new Promise<void>((resolve, reject) => {
-      pending = { kind: "unload", resolve, reject };
+      setPending({ kind: "unload", resolve, reject });
       send({ type: "unload" });
     });
   }
